@@ -12,6 +12,8 @@ interface DesignerProps {
 export const Designer = ({ }: DesignerProps) => {
     const [canvas, setCanvas] = useState<fabric.Canvas | null>(null)
     const [tshirtColor, setTshirtColor] = useState("#ffffff")
+    const [currentView, setCurrentView] = useState<'front' | 'back' | 'left' | 'right'>('front')
+    const [canvasStates, setCanvasStates] = useState<Record<string, any[]>>({})
 
     // Delete Icon SVG
     const deleteIcon = "data:image/svg+xml,%3C%3Fxml version='1.0' encoding='utf-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg version='1.1' id='Ebene_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' width='595.275px' height='595.275px' viewBox='200 215 230 470' xml:space='preserve'%3E%3Ccircle style='fill:%23F44336;' cx='299.76' cy='439.067' r='218.516'/%3E%3Cg%3E%3Crect x='267.162' y='307.978' transform='matrix(0.7071 -0.7071 0.7071 0.7071 -222.6202 340.6915)' style='fill:white;' width='65.545' height='262.18'/%3E%3Crect x='266.988' y='308.153' transform='matrix(0.7071 0.7071 -0.7071 0.7071 398.3889 -83.3116)' style='fill:white;' width='65.544' height='262.179'/%3E%3C/g%3E%3C/svg%3E";
@@ -54,6 +56,41 @@ export const Designer = ({ }: DesignerProps) => {
             touchSizeX: 24,
             touchSizeY: 24
         });
+    }
+
+    const switchView = (newView: 'front' | 'back' | 'left' | 'right') => {
+        if (!canvas) return
+        if (newView === currentView) return
+
+        // 1. Save current logic
+        const userObjects = canvas.getObjects().filter(o =>
+            o.name !== 'tshirt-background' && o.name !== 'printable-area'
+        )
+        const json = userObjects.map(o => o.toObject(['name', 'id'])) // Preserve name/id if any custom props
+
+        setCanvasStates(prev => ({
+            ...prev,
+            [currentView]: json
+        }))
+
+        // 2. Clear user objects
+        canvas.remove(...userObjects)
+        canvas.discardActiveObject()
+
+        // 3. Load new view logic
+        const savedObjects = canvasStates[newView] || []
+        if (savedObjects.length > 0) {
+            fabric.util.enlivenObjects(savedObjects, (objects: fabric.Object[]) => {
+                objects.forEach(o => {
+                    addDeleteControl(o) // Re-add control logic
+                    canvas.add(o)
+                })
+                canvas.requestRenderAll()
+            }, 'fabric')
+        }
+
+        setCurrentView(newView)
+        canvas.requestRenderAll()
     }
 
     // Handle Upload Logo
@@ -242,8 +279,22 @@ export const Designer = ({ }: DesignerProps) => {
 
     return (
         <div className="flex h-screen w-full bg-background">
-            <div className="flex-1 flex items-center justify-center p-8">
-                <Canvas color={tshirtColor} onCanvasReady={setCanvas} />
+            <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
+                <div className="flex space-x-2 bg-secondary p-1 rounded-lg">
+                    {(['front', 'back', 'left', 'right'] as const).map((view) => (
+                        <button
+                            key={view}
+                            onClick={() => switchView(view)}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${currentView === view
+                                    ? "bg-background shadow-sm text-foreground"
+                                    : "text-muted-foreground hover:bg-background/50"
+                                }`}
+                        >
+                            {view.charAt(0).toUpperCase() + view.slice(1)}
+                        </button>
+                    ))}
+                </div>
+                <Canvas color={tshirtColor} view={currentView} onCanvasReady={setCanvas} />
             </div>
             <Toolbar
                 color={tshirtColor}

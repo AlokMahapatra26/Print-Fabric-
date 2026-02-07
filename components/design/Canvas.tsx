@@ -5,10 +5,11 @@ import { fabric } from 'fabric'
 
 interface CanvasProps {
     color: string
+    view: 'front' | 'back' | 'left' | 'right'
     onCanvasReady?: (canvas: fabric.Canvas) => void
 }
 
-export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
+export const Canvas = ({ color, view, onCanvasReady }: CanvasProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null)
     const [tshirtObject, setTshirtObject] = useState<fabric.Object | null>(null)
@@ -41,7 +42,8 @@ export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
             strokeWidth: 1,
             selectable: false,
             evented: false,
-            excludeFromExport: true
+            excludeFromExport: true,
+            name: 'printable-area'
         })
         canvas.add(printableArea)
         // Ensure it stays above tshirt but below logos
@@ -109,12 +111,32 @@ export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
     useEffect(() => {
         if (!fabricCanvas) return
 
-        const targetSrc = color === '#000000' ? '/black-tshirt.png' : '/tshirt-realistic.png'
+        let targetSrc = ''
+        let shouldFilter = true
+
+        if (view === 'front') {
+            if (color === '#000000') {
+                targetSrc = '/black-tshirt.png'
+                shouldFilter = false // Already black
+            } else {
+                targetSrc = '/tshirt-realistic.png'
+                shouldFilter = color !== '#ffffff'
+            }
+        } else {
+            if (color === '#000000') {
+                targetSrc = `/black-tshirt-${view}.png`
+                shouldFilter = false // Already black
+            } else {
+                // For back, left, right - we generated white base images
+                targetSrc = `/tshirt-${view}.png`
+                shouldFilter = color !== '#ffffff'
+            }
+        }
 
         // Function to apply filters to the object
         const applyColorFilter = (img: fabric.Image) => {
-            if (color === '#000000' || color === '#ffffff') {
-                // No tint for black (it's the black image) or pure white (it's the white image)
+            console.log('Applying filter:', { color, shouldFilter, view })
+            if (!shouldFilter) {
                 img.filters = []
             } else {
                 const filter = new fabric.Image.filters.BlendColor({
@@ -130,7 +152,11 @@ export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
         if (currentImageSrc !== targetSrc) {
             // Need to switch image
             fabric.Image.fromURL(targetSrc, (img) => {
-                img.scaleToWidth(700)
+                // Front image seems smaller (has more padding), so we scale it up
+                // to match the visual size of the back/side generated images
+                const scaleWidth = view === 'front' ? 800 : 700
+                img.scaleToWidth(scaleWidth)
+
                 img.set({
                     left: 350,
                     top: 425,
@@ -138,6 +164,7 @@ export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
                     originY: 'center',
                     selectable: false,
                     evented: false,
+                    name: 'tshirt-background'
                 })
 
                 // Remove old object if exists
@@ -158,7 +185,7 @@ export const Canvas = ({ color, onCanvasReady }: CanvasProps) => {
             applyColorFilter(tshirtObject)
             fabricCanvas.renderAll()
         }
-    }, [color, fabricCanvas, currentImageSrc, tshirtObject])
+    }, [color, view, fabricCanvas, currentImageSrc, tshirtObject])
 
     return (
         <div className="flex items-center justify-center border rounded-lg overflow-hidden bg-background">
