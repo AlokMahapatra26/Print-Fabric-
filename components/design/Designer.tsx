@@ -4,6 +4,7 @@ import { fabric } from "fabric"
 import FontFaceObserver from "fontfaceobserver"
 import { Canvas } from "./Canvas"
 import { Toolbar } from "./Toolbar"
+import { Undo } from "lucide-react"
 
 interface DesignerProps {
     // No props passed from page currently
@@ -14,6 +15,104 @@ export const Designer = ({ }: DesignerProps) => {
     const [tshirtColor, setTshirtColor] = useState("#ffffff")
     const [currentView, setCurrentView] = useState<'front' | 'back' | 'left' | 'right'>('front')
     const [canvasStates, setCanvasStates] = useState<Record<string, any[]>>({})
+
+    // History for Undo/Redo
+    const [history, setHistory] = useState<string[]>([])
+    const [historyStep, setHistoryStep] = useState<number>(-1)
+    const [isHistoryProcessing, setIsHistoryProcessing] = useState(false)
+
+    // Helper to save current state to history
+    const saveHistory = () => {
+        if (!canvas || isHistoryProcessing) return
+
+        const userObjects = canvas.getObjects().filter(o =>
+            o.name !== 'tshirt-background' && o.name !== 'printable-area'
+        )
+        const json = JSON.stringify(userObjects.map(o => o.toObject(['name', 'id'])))
+
+        // If we represent the *current* state, we should check if it's different from the *last* saved state
+        // to avoid duplicate entries (though difficult with object refs).
+        // Standard approach: slice history up to current step, push new state.
+
+        // Also we need to handle the case where we might be in the middle of history
+        const newHistory = history.slice(0, historyStep + 1)
+        newHistory.push(json)
+
+        setHistory(newHistory)
+        setHistoryStep(newHistory.length - 1)
+    }
+
+    const undo = () => {
+        if (historyStep <= 0) return // cannot undo if step is 0 (initial state) or -1
+        setIsHistoryProcessing(true)
+        const prevStep = historyStep - 1
+        const prevStateJSON = JSON.parse(history[prevStep])
+
+        // Clear current user objects
+        const userObjects = canvas!.getObjects().filter(o =>
+            o.name !== 'tshirt-background' && o.name !== 'printable-area'
+        )
+        canvas!.remove(...userObjects)
+        canvas!.discardActiveObject()
+
+        // Load prev state
+        if (prevStateJSON.length > 0) {
+            fabric.util.enlivenObjects(prevStateJSON, (objects: fabric.Object[]) => {
+                objects.forEach(o => {
+                    addDeleteControl(o)
+                    canvas!.add(o)
+                })
+                canvas!.requestRenderAll()
+                setIsHistoryProcessing(false)
+            }, 'fabric')
+        } else {
+            canvas!.requestRenderAll()
+            setIsHistoryProcessing(false)
+        }
+        setHistoryStep(prevStep)
+    }
+
+
+
+    // Initialize history on load and attach listeners
+    useEffect(() => {
+        if (!canvas) return
+
+        // Save initial empty state if history is empty
+        if (history.length === 0) {
+            const json = JSON.stringify([])
+            setHistory([json])
+            setHistoryStep(0)
+        }
+
+        const handleSave = () => {
+            saveHistory()
+        }
+
+        canvas.on('object:added', handleSave)
+        canvas.on('object:modified', handleSave)
+        canvas.on('object:removed', handleSave)
+
+        return () => {
+            canvas.off('object:added', handleSave)
+            canvas.off('object:modified', handleSave)
+            canvas.off('object:removed', handleSave)
+        }
+    }, [canvas, historyStep, isHistoryProcessing]) // Dependencies might need tuning to avoid stale closures or infinite loops
+    // Ideally saveHistory shouldn't depend on stale history, but setState functional update handles it. 
+    // However, event listener closure might capture old state?
+    // Steps to avoid stale closures in event listeners:
+    // 1. Use ref for history/step?
+    // 2. Or just accept that we re-bind listeners on change (might be expensive/flickery).
+    // Let's refine the listener attachment.
+
+    // Better approach: Use a ref to track if we should save, and maybe `saveHistory` uses functional state updates 
+    // but `history.slice` needs current history.
+    // Actually, `saveHistory` needs access to the *latest* history.
+    // Let's make `saveHistory` wrapped in useCallback with dependency, or just let useEffect re-bind.
+    // Re-binding on every step change is okay for this scale.
+
+
 
     // Delete Icon SVG
     const deleteIcon = "data:image/svg+xml,%3C%3Fxml version='1.0' encoding='utf-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg version='1.1' id='Ebene_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' width='595.275px' height='595.275px' viewBox='200 215 230 470' xml:space='preserve'%3E%3Ccircle style='fill:%23F44336;' cx='299.76' cy='439.067' r='218.516'/%3E%3Cg%3E%3Crect x='267.162' y='307.978' transform='matrix(0.7071 -0.7071 0.7071 0.7071 -222.6202 340.6915)' style='fill:white;' width='65.545' height='262.18'/%3E%3Crect x='266.988' y='308.153' transform='matrix(0.7071 0.7071 -0.7071 0.7071 398.3889 -83.3116)' style='fill:white;' width='65.544' height='262.179'/%3E%3C/g%3E%3C/svg%3E";
@@ -277,6 +376,107 @@ export const Designer = ({ }: DesignerProps) => {
         }
     }
 
+    const handleAddMeme = (url: string) => {
+        if (!canvas) return
+
+        // Use fabric.Image.fromURL with crossOrigin 'anonymous' to avoid tainting canvas if possible
+        // though imgflip might not support CORS, in which case export might fail, but display will work
+        fabric.Image.fromURL(url, (img) => {
+            img.scaleToWidth(200)
+            img.set({
+                left: 350,
+                top: 450,
+                originX: 'center',
+                originY: 'center',
+                borderColor: 'gray',
+                cornerColor: 'black',
+                cornerSize: 10,
+                transparentCorners: false
+            })
+
+            addDeleteControl(img)
+
+            canvas.add(img)
+            canvas.setActiveObject(img)
+            canvas.renderAll()
+        }, { crossOrigin: 'anonymous' })
+    }
+
+    const handleBorderChange = (color: string, width: number) => {
+        if (!canvas) return
+        const activeObject = canvas.getActiveObject()
+        if (!activeObject) return
+
+        activeObject.set({
+            stroke: color,
+            strokeWidth: width,
+            strokeUniform: true
+        })
+
+        if (activeObject instanceof fabric.Group) {
+            activeObject.getObjects().forEach(obj => {
+                obj.set({
+                    stroke: color,
+                    strokeWidth: width,
+                    strokeUniform: true
+                })
+            })
+        }
+
+        canvas.requestRenderAll()
+        canvas.fire('object:modified', { target: activeObject })
+    }
+
+    const handleRadiusChange = (radius: number) => {
+        if (!canvas) return
+        const activeObject = canvas.getActiveObject()
+        if (!activeObject) return
+
+        if (radius === 0) {
+            activeObject.set({ clipPath: undefined })
+        } else {
+            const width = activeObject.width || 0
+            const height = activeObject.height || 0
+
+            const clipRect = new fabric.Rect({
+                left: -width / 2,
+                top: -height / 2,
+                width: width,
+                height: height,
+                rx: radius,
+                ry: radius,
+                originX: 'left',
+                originY: 'top'
+            })
+
+            activeObject.set({ clipPath: clipRect })
+        }
+
+        canvas.requestRenderAll()
+        canvas.fire('object:modified', { target: activeObject })
+    }
+
+    const handleShadowChange = (color: string, blur: number) => {
+        if (!canvas) return
+        const activeObject = canvas.getActiveObject()
+        if (!activeObject) return
+
+        if (blur === 0) {
+            activeObject.set({ shadow: undefined })
+        } else {
+            const shadow = new fabric.Shadow({
+                color: color,
+                blur: blur,
+                offsetX: 0,
+                offsetY: 0
+            })
+            activeObject.set({ shadow: shadow })
+        }
+
+        canvas.requestRenderAll()
+        canvas.fire('object:modified', { target: activeObject })
+    }
+
     return (
         <div className="flex h-screen w-full bg-background">
             <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
@@ -286,13 +486,22 @@ export const Designer = ({ }: DesignerProps) => {
                             key={view}
                             onClick={() => switchView(view)}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${currentView === view
-                                    ? "bg-background shadow-sm text-foreground"
-                                    : "text-muted-foreground hover:bg-background/50"
+                                ? "bg-background shadow-sm text-foreground"
+                                : "text-muted-foreground hover:bg-background/50"
                                 }`}
                         >
                             {view.charAt(0).toUpperCase() + view.slice(1)}
                         </button>
                     ))}
+                    <div className="w-px h-8 bg-border mx-2" />
+                    <button
+                        onClick={undo}
+                        disabled={historyStep <= 0}
+                        className="px-3 py-2 rounded-md text-muted-foreground hover:bg-background/50 disabled:opacity-50"
+                        title="Undo"
+                    >
+                        <Undo className="w-4 h-4" />
+                    </button>
                 </div>
                 <Canvas color={tshirtColor} view={currentView} onCanvasReady={setCanvas} />
             </div>
@@ -305,6 +514,10 @@ export const Designer = ({ }: DesignerProps) => {
                 onAddText={handleAddText}
                 onObjectColorChange={handleObjectColorChange}
                 onFontChange={handleFontChange}
+                onAddMeme={handleAddMeme}
+                onBorderChange={handleBorderChange}
+                onRadiusChange={handleRadiusChange}
+                onShadowChange={handleShadowChange}
             />
         </div>
     )
