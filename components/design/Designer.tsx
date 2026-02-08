@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react"
 import { fabric } from "fabric"
 import FontFaceObserver from "fontfaceobserver"
 import { Canvas } from "./Canvas"
-import { Toolbar } from "./Toolbar"
+import { LeftSidebar } from "./LeftSidebar"
+import { RightSidebar } from "./RightSidebar"
 import { Undo, Download } from "lucide-react"
 import { downloadDesign } from "./DownloadHelper"
 
@@ -485,6 +486,14 @@ export const Designer = ({ }: DesignerProps) => {
 
     return (
         <div className="flex h-screen w-full bg-background">
+            <LeftSidebar
+                color={tshirtColor}
+                setColor={setTshirtColor}
+                onUploadLogo={handleUploadLogo}
+                onAddIcon={handleAddIcon}
+                onAddText={handleAddText}
+                onAddMeme={handleAddMeme}
+            />
             <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
                 <div className="flex space-x-2 bg-secondary p-1 rounded-lg">
                     {(['front', 'back', 'left', 'right'] as const).map((view) => (
@@ -518,16 +527,10 @@ export const Designer = ({ }: DesignerProps) => {
                 </div>
                 <Canvas color={tshirtColor} view={currentView} onCanvasReady={setCanvas} />
             </div>
-            <Toolbar
-                color={tshirtColor}
-                setColor={setTshirtColor}
-                onUploadLogo={handleUploadLogo}
+            <RightSidebar
                 onAlign={handleAlign}
-                onAddIcon={handleAddIcon}
-                onAddText={handleAddText}
                 onObjectColorChange={handleObjectColorChange}
                 onFontChange={handleFontChange}
-                onAddMeme={handleAddMeme}
                 onBorderChange={handleBorderChange}
                 onRadiusChange={handleRadiusChange}
                 onShadowChange={handleShadowChange}
