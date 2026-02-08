@@ -23,8 +23,9 @@ const MEMES = [
     { name: "Bernie I Am Once Again Asking", url: "https://i.imgflip.com/1o00in.jpg" },
     { name: "Batman Slapping Robin", url: "https://i.imgflip.com/9ehk.jpg" },
     { name: "X X Everywhere", url: "https://i.imgflip.com/1ihzfe.jpg" },
-    { name: "Waiting Skeleton", url: "https://i.imgflip.com/265j.jpg" },
+    { name: "Black kids", url: "https://i.imgflip.com/265j.jpg" },
     { name: "Expanding Brain", url: "https://i.imgflip.com/1jwhww.jpg" },
+    { name: "Ghee Khatam", url: "https://27m4ul1slc.ufs.sh/f/VKk4lsXcZMtHESE8lbCGiJ4n0IP8kXs7uMbZKwmLyloRQ9p1" }
 ]
 
 export const MemePicker = ({ onSelectMeme }: MemePickerProps) => {

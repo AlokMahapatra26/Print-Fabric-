@@ -4,7 +4,8 @@ import { fabric } from "fabric"
 import FontFaceObserver from "fontfaceobserver"
 import { Canvas } from "./Canvas"
 import { Toolbar } from "./Toolbar"
-import { Undo } from "lucide-react"
+import { Undo, Download } from "lucide-react"
+import { downloadDesign } from "./DownloadHelper"
 
 interface DesignerProps {
     // No props passed from page currently
@@ -477,6 +478,11 @@ export const Designer = ({ }: DesignerProps) => {
         canvas.fire('object:modified', { target: activeObject })
     }
 
+    const handleDownload = async () => {
+        if (!canvas) return
+        await downloadDesign(canvas, canvasStates, currentView, tshirtColor)
+    }
+
     return (
         <div className="flex h-screen w-full bg-background">
             <div className="flex-1 flex flex-col items-center justify-center p-8 gap-4">
@@ -501,6 +507,13 @@ export const Designer = ({ }: DesignerProps) => {
                         title="Undo"
                     >
                         <Undo className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={handleDownload}
+                        className="px-3 py-2 rounded-md text-muted-foreground hover:bg-background/50"
+                        title="Download Design"
+                    >
+                        <Download className="w-4 h-4" />
                     </button>
                 </div>
                 <Canvas color={tshirtColor} view={currentView} onCanvasReady={setCanvas} />
